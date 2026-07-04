@@ -1,0 +1,126 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CANDIDATE
+  RECRUITER
+}
+
+enum JobStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum ApplicationStatus {
+  WISHLIST
+  APPLIED
+  SCREENING
+  ASSESSMENT
+  INTERVIEW
+  HR_ROUND
+  OFFER
+  REJECTED
+  JOINED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(CANDIDATE)
+  resumeUrl    String?       // Resume file link for candidate profile
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  // Relations
+  jobsCreated  Job[]         @relation("RecruiterJobs")
+  applications Application[]
+  savedJobs    SavedJob[]
+
+  @@map("users")
+}
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  logo        String?  // URL to logo image
+  website     String?
+  industry    String?
+  location    String?
+  size        String?  // Company size, e.g., "1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  jobs        Job[]
+
+  @@map("companies")
+}
+
+model Job {
+  id          String    @id @default(uuid())
+  companyId   String
+  recruiterId String
+  title       String
+  description String    @db.Text
+  salary      String    // String to allow ranges, e.g., "$100k - $120k"
+  experience  String    // e.g., "Entry Level", "2-5 years", "Senior"
+  location    String    // e.g., "New York, NY"
+  jobType     String    // e.g., "Full-time", "Part-time", "Contract", "Internship"
+  workMode    String    @default("Onsite") // e.g., "Remote", "Hybrid", "Onsite"
+  skills      String[]  // Array of required skills
+  status      JobStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recruiter   User      @relation("RecruiterJobs", fields: [recruiterId], references: [id], onDelete: Cascade)
+  applications Application[]
+  savedJobs   SavedJob[]
+
+  @@map("jobs")
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  candidateId String
+  jobId       String
+  resumeUrl   String            // URL to candidate's submitted resume
+  coverLetter String?           @db.Text
+  status      ApplicationStatus @default(APPLIED)
+  notes       String?           @db.Text // Candidate's personal tracking notes
+  appliedAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  candidate   User              @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job         Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // A candidate can only apply to a job once
+  @@unique([candidateId, jobId])
+  @@map("applications")
+}
+
+model SavedJob {
+  id          String   @id @default(uuid())
+  candidateId String
+  jobId       String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  candidate   User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  // A candidate can only save a job once
+  @@unique([candidateId, jobId])
+  @@map("saved_jobs")
+}
