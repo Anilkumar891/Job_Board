@@ -15,7 +15,52 @@ function CreateJob() {
   const [skills, setSkills] = useState([]);
   const [skillInput, setSkillInput] = useState('');
 
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  // Create Company Inline States
+  const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
+  const [creatingCompany, setCreatingCompany] = useState(false);
+  const [companyForm, setCompanyForm] = useState({
+    name: '',
+    website: '',
+    industry: '',
+    location: '',
+    size: '11-50',
+    description: ''
+  });
+
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm();
+
+  const handleCreateCompanySubmit = async (e) => {
+    e.preventDefault();
+    if (!companyForm.name.trim()) {
+      toast.error('Company Name is required');
+      return;
+    }
+
+    setCreatingCompany(true);
+    try {
+      const response = await api.post('/companies', companyForm);
+      if (response.data.success) {
+        const newCompany = response.data.data;
+        setCompanies(prev => [...prev, newCompany]);
+        setValue('companyId', newCompany.id); // Set selected company ID
+        toast.success('Company profile created successfully!');
+        setShowCreateCompanyModal(false);
+        setCompanyForm({
+          name: '',
+          website: '',
+          industry: '',
+          location: '',
+          size: '11-50',
+          description: ''
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Error creating company profile');
+    } finally {
+      setCreatingCompany(false);
+    }
+  };
 
   // Load existing companies
   useEffect(() => {
@@ -125,16 +170,25 @@ function CreateJob() {
               {loadingCompanies ? (
                 <div className="h-10 bg-slate-100 dark:bg-zinc-900 animate-pulse rounded-xl"></div>
               ) : (
-                <select
-                  id="companyId"
-                  {...register('companyId', { required: 'Please select a company' })}
-                  className="block w-full px-3 py-3 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-850 dark:text-zinc-100 text-sm font-semibold focus:outline-none"
-                >
-                  <option value="">Choose Company Profile</option>
-                  {companies.map((comp) => (
-                    <option key={comp.id} value={comp.id}>{comp.name}</option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    id="companyId"
+                    {...register('companyId', { required: 'Please select a company' })}
+                    className="block w-full px-3 py-3 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-850 dark:text-zinc-100 text-sm font-semibold focus:outline-none"
+                  >
+                    <option value="">Choose Company Profile</option>
+                    {companies.map((comp) => (
+                      <option key={comp.id} value={comp.id}>{comp.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCompanyModal(true)}
+                    className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 hover:underline font-bold mt-1.5 block text-left"
+                  >
+                    Can't find your company? Create a new profile
+                  </button>
+                </>
               )}
               {errors.companyId && <p className="text-xs text-rose-500 font-semibold">{errors.companyId.message}</p>}
             </div>
@@ -310,6 +364,132 @@ function CreateJob() {
 
         </form>
       </div>
+
+      {/* Create Company Modal */}
+      {showCreateCompanyModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-darkCard max-w-md w-full rounded-3xl border border-slate-200 dark:border-darkBorder shadow-premium-hover p-6 space-y-6">
+            
+            <div className="flex justify-between items-start border-b dark:border-zinc-800 pb-3">
+              <div>
+                <h3 className="font-sans font-extrabold text-lg">Create Company Profile</h3>
+                <p className="text-xs text-slate-400 font-semibold">Register a corporate profile to assign to job posts</p>
+              </div>
+              <button
+                onClick={() => setShowCreateCompanyModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 text-sm font-bold"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCompanySubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Company Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={companyForm.name}
+                  onChange={(e) => setCompanyForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. Acme Corp"
+                  className="block w-full px-3 py-2.5 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 text-sm font-medium focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Industry
+                  </label>
+                  <input
+                    type="text"
+                    value={companyForm.industry}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, industry: e.target.value }))}
+                    placeholder="e.g. Technology"
+                    className="block w-full px-3 py-2.5 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 text-sm font-medium focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={companyForm.location}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="e.g. New York, NY"
+                    className="block w-full px-3 py-2.5 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 text-sm font-medium focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Company Size
+                  </label>
+                  <select
+                    value={companyForm.size}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, size: e.target.value }))}
+                    className="block w-full px-3 py-2.5 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 text-sm font-semibold focus:outline-none"
+                  >
+                    <option value="1-10">1-10 employees</option>
+                    <option value="11-50">11-50 employees</option>
+                    <option value="51-200">51-200 employees</option>
+                    <option value="201-500">201-500 employees</option>
+                    <option value="501-1000">501-1000 employees</option>
+                    <option value="1000+">1000+ employees</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Website URL
+                  </label>
+                  <input
+                    type="text"
+                    value={companyForm.website}
+                    onChange={(e) => setCompanyForm(prev => ({ ...prev, website: e.target.value }))}
+                    placeholder="e.g. https://acme.com"
+                    className="block w-full px-3 py-2.5 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 text-sm font-medium focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Description
+                </label>
+                <textarea
+                  value={companyForm.description}
+                  onChange={(e) => setCompanyForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Tell us about the company..."
+                  rows={3}
+                  className="block w-full px-3 py-2.5 border border-slate-200 dark:border-zinc-800 rounded-xl bg-slate-50 dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 text-sm font-medium focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateCompanyModal(false)}
+                  className="w-1/2 border border-slate-200 dark:border-zinc-800 hover:border-slate-300 text-slate-700 dark:text-zinc-300 font-bold py-2.5 rounded-xl text-sm transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingCompany}
+                  className="w-1/2 bg-primary-600 hover:bg-primary-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all disabled:opacity-50"
+                >
+                  {creatingCompany ? 'Creating...' : 'Create Profile'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
