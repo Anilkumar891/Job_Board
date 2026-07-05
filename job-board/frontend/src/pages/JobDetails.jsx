@@ -104,13 +104,11 @@ function JobDetails() {
   const handleApplySubmit = async (e) => {
     e.preventDefault();
     
-    if (!useProfileResume && !uploadedFile) {
-      toast.error('Please upload a resume file.');
-      return;
-    }
+    const hasProfileResume = !!user?.resumeUrl;
+    const isUsingProfile = useProfileResume && hasProfileResume;
 
-    if (useProfileResume && !user.resumeUrl) {
-      toast.error('No default profile resume found. Please upload one or select a file.');
+    if (!isUsingProfile && !uploadedFile) {
+      toast.error('Please select or upload a resume file.');
       return;
     }
 
@@ -120,16 +118,12 @@ function JobDetails() {
       formData.append('jobId', id);
       if (coverLetter.trim()) formData.append('coverLetter', coverLetter);
       
-      if (!useProfileResume && uploadedFile) {
+      if (!isUsingProfile && uploadedFile) {
         formData.append('resume', uploadedFile);
       }
 
-      // API request with multipart headers
-      const response = await api.post('/applications/apply', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // API request: Axios will automatically handle the headers & boundaries for FormData
+      const response = await api.post('/applications/apply', formData);
 
       if (response.data.success) {
         toast.success('Application submitted successfully!');
@@ -137,7 +131,7 @@ function JobDetails() {
         setIsApplyModalOpen(false);
 
         // If a new resume was uploaded, update local profile cache
-        if (!useProfileResume && response.data.data.resumeUrl) {
+        if (!isUsingProfile && response.data.data.resumeUrl) {
           updateResumeUrl(response.data.data.resumeUrl);
         }
       }
@@ -289,6 +283,9 @@ function JobDetails() {
                     navigate('/login', { state: { from: { pathname: `/jobs/${id}` } } });
                     return;
                   }
+                  setUseProfileResume(!!user.resumeUrl);
+                  setUploadedFile(null);
+                  setCoverLetter('');
                   setIsApplyModalOpen(true);
                 }}
                 className="bg-primary-600 hover:bg-primary-700 text-white font-bold text-sm px-6 py-3.5 rounded-xl transition-all shadow-sm"

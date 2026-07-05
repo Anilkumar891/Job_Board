@@ -62,7 +62,7 @@ const applyToJob = async (req, res, next) => {
     if (!resumeUrl) {
       return res.status(400).json({
         success: false,
-        message: 'Please upload a resume or add one to your profile before applying.'
+        message: 'Resume file missing. Please upload a resume or set a profile default resume.'
       });
     }
 
