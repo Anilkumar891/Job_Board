@@ -1,6 +1,7 @@
 const prisma = require('../config/db');
+const providerManager = require('../services/externalJobs/providerManager');
 
-// @desc    Get all jobs (with advanced search, filter, sorting, and pagination)
+// @desc    Get all jobs (recruiter + external, merged, filtered, paginated)
 // @route   GET /api/jobs
 // @access  Public
 const getAllJobs = async (req, res, next) => {
@@ -11,109 +12,154 @@ const getAllJobs = async (req, res, next) => {
       jobType,
       workMode,
       experience,
-      minSalary,
-      maxSalary,
       skills,
-      companyId,
       sortBy, // 'latest', 'highest-salary', 'lowest-salary'
       page = 1,
-      limit = 10
+      limit = 12,
+      includeExternal = 'true'
     } = req.query;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
 
-    // Build the query where clause
-    const where = {
-      status: 'ACTIVE' // By default only active jobs are shown to the public
-    };
+    // ─── 1. RECRUITER JOBS FROM DATABASE ─────────────────────────────────────
+    const where = { status: 'ACTIVE' };
 
-    // If companyId is requested (e.g. for company profile page)
-    if (companyId) {
-      where.companyId = companyId;
-    }
-
-    // Filter by Search Query (Title, Company Name, Skills, Description)
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
         { company: { name: { contains: search, mode: 'insensitive' } } },
-        { skills: { hasSome: [search] } } // exact match on one skill in search string
+        { skills: { hasSome: [search] } }
       ];
     }
-
-    // Filter by Location
-    if (location) {
-      where.location = { contains: location, mode: 'insensitive' };
-    }
-
-    // Filter by Job Type (e.g. Full-time, Part-time, Contract, Internship)
+    if (location) where.location = { contains: location, mode: 'insensitive' };
     if (jobType) {
       const types = Array.isArray(jobType) ? jobType : [jobType];
       where.jobType = { in: types };
     }
-
-    // Filter by Work Mode (e.g. Remote, Hybrid, Onsite)
     if (workMode) {
       const modes = Array.isArray(workMode) ? workMode : [workMode];
       where.workMode = { in: modes };
     }
-
-    // Filter by Experience Level
     if (experience) {
       const levels = Array.isArray(experience) ? experience : [experience];
       where.experience = { in: levels };
     }
-
-    // Filter by skills (e.g., array of skills)
     if (skills) {
       const skillList = Array.isArray(skills) ? skills : [skills];
       where.skills = { hasSome: skillList };
     }
 
-    // Determine Sort Order
-    let orderBy = { createdAt: 'desc' }; // default 'latest'
-    if (sortBy === 'highest-salary') {
-      orderBy = { salary: 'desc' };
-    } else if (sortBy === 'lowest-salary') {
-      orderBy = { salary: 'asc' };
+    const dbJobs = await prisma.job.findMany({
+      where,
+      include: {
+        company: {
+          select: { name: true, logo: true, location: true, industry: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Normalize recruiter jobs to unified format
+    const recruiterJobs = dbJobs.map(job => ({
+      id: job.id,
+      title: job.title,
+      company: job.company?.name || 'Unknown Company',
+      companyLogo: job.company?.logo || null,
+      location: job.location || 'Not Specified',
+      salary: job.salary || 'Salary Undisclosed',
+      experience: job.experience || 'Not Specified',
+      employmentType: job.jobType || 'Full-time',
+      remote: job.workMode === 'Remote',
+      skills: Array.isArray(job.skills) ? job.skills : [],
+      description: job.description || '',
+      postedDate: job.createdAt,
+      source: 'Recruiter',
+      applyUrl: null,        // null = in-app apply
+      originalId: job.id    // keep DB id for in-app apply flow
+    }));
+
+    // ─── 2. EXTERNAL JOBS FROM PROVIDER MANAGER ──────────────────────────────
+    let externalJobs = [];
+    if (includeExternal !== 'false') {
+      try {
+        externalJobs = await providerManager.getExternalJobs();
+      } catch (err) {
+        console.error('[getAllJobs] External provider fetch failed:', err.message);
+      }
     }
 
-    // Execute query with transaction to get total count
-    const [jobs, totalJobs] = await prisma.$transaction([
-      prisma.job.findMany({
-        where,
-        include: {
-          company: {
-            select: {
-              name: true,
-              logo: true,
-              location: true,
-              industry: true
-            }
-          }
-        },
-        orderBy,
-        skip,
-        take: limitNum
-      }),
-      prisma.job.count({ where })
-    ]);
+    // Apply same filters to external jobs in-memory
+    let filteredExternal = externalJobs;
+    if (search) {
+      const q = search.toLowerCase();
+      filteredExternal = filteredExternal.filter(j =>
+        j.title.toLowerCase().includes(q) ||
+        j.company.toLowerCase().includes(q) ||
+        (j.description || '').toLowerCase().includes(q) ||
+        (Array.isArray(j.skills) && j.skills.some(s => s.toLowerCase().includes(q)))
+      );
+    }
+    if (location) {
+      const loc = location.toLowerCase();
+      filteredExternal = filteredExternal.filter(j =>
+        (j.location || '').toLowerCase().includes(loc)
+      );
+    }
+    if (workMode) {
+      const modes = Array.isArray(workMode) ? workMode.map(m => m.toLowerCase()) : [workMode.toLowerCase()];
+      if (modes.includes('remote')) {
+        filteredExternal = filteredExternal.filter(j => j.remote === true);
+      }
+    }
+    if (experience) {
+      const levels = Array.isArray(experience) ? experience.map(e => e.toLowerCase()) : [experience.toLowerCase()];
+      filteredExternal = filteredExternal.filter(j =>
+        levels.some(l => (j.experience || '').toLowerCase().includes(l))
+      );
+    }
+    if (jobType) {
+      const types = Array.isArray(jobType) ? jobType.map(t => t.toLowerCase()) : [jobType.toLowerCase()];
+      filteredExternal = filteredExternal.filter(j =>
+        types.some(t => (j.employmentType || '').toLowerCase().includes(t))
+      );
+    }
 
+    // ─── 3. MERGE & SORT ─────────────────────────────────────────────────────
+    let combined = [...recruiterJobs, ...filteredExternal];
+
+    if (sortBy === 'highest-salary') {
+      combined.sort((a, b) => {
+        const getSalary = s => parseInt((s || '0').replace(/[^0-9]/g, '')) || 0;
+        return getSalary(b.salary) - getSalary(a.salary);
+      });
+    } else if (sortBy === 'lowest-salary') {
+      combined.sort((a, b) => {
+        const getSalary = s => parseInt((s || '0').replace(/[^0-9]/g, '')) || 0;
+        return getSalary(a.salary) - getSalary(b.salary);
+      });
+    } else {
+      // Default: latest first
+      combined.sort((a, b) => new Date(b.postedDate) - new Date(a.postedDate));
+    }
+
+    // ─── 4. PAGINATE ─────────────────────────────────────────────────────────
+    const totalJobs = combined.length;
     const totalPages = Math.ceil(totalJobs / limitNum);
+    const skip = (pageNum - 1) * limitNum;
+    const paginatedJobs = combined.slice(skip, skip + limitNum);
 
     res.status(200).json({
       success: true,
-      count: jobs.length,
+      count: paginatedJobs.length,
       pagination: {
         totalJobs,
         totalPages,
         currentPage: pageNum,
         limit: limitNum
       },
-      data: jobs
+      data: paginatedJobs
     });
   } catch (error) {
     next(error);

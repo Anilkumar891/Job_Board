@@ -19,12 +19,14 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
+const externalJobsRoutes = require('./routes/externalJobsRoutes');
 const jobsRoutes = require('./routes/jobsRoutes');
 const companiesRoutes = require('./routes/companiesRoutes');
 const applicationsRoutes = require('./routes/applicationsRoutes');
 const savedJobsRoutes = require('./routes/savedJobsRoutes');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/jobs/external', externalJobsRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/companies', companiesRoutes);
 app.use('/api/applications', applicationsRoutes);
