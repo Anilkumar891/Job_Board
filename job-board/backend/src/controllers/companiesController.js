@@ -78,6 +78,19 @@ const createCompany = async (req, res, next) => {
       });
     }
 
+    // Check if logged-in recruiter already has a company
+    if (req.user) {
+      const existingCompany = await prisma.company.findUnique({
+        where: { recruiterId: req.user.id }
+      });
+      if (existingCompany) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have already registered a company profile'
+        });
+      }
+    }
+
     // Check if company with same name exists
     const companyExists = await prisma.company.findFirst({
       where: { name: { equals: name, mode: 'insensitive' } }
@@ -98,7 +111,8 @@ const createCompany = async (req, res, next) => {
         industry,
         location,
         size,
-        description
+        description,
+        recruiterId: req.user ? req.user.id : null
       }
     });
 
@@ -182,10 +196,43 @@ const deleteCompany = async (req, res, next) => {
   }
 };
 
+// @desc    Get logged-in recruiter's company
+// @route   GET /api/companies/my-company
+// @access  Private (Recruiter only)
+const getMyCompany = async (req, res, next) => {
+  try {
+    if (!req.user || req.user.role !== 'RECRUITER') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only recruiters can retrieve their associated company profile.'
+      });
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { recruiterId: req.user.id }
+    });
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: 'No company profile found for this recruiter.'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: company
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAllCompanies,
   getCompanyById,
   createCompany,
   updateCompany,
-  deleteCompany
+  deleteCompany,
+  getMyCompany
 };

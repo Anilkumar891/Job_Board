@@ -43,6 +43,7 @@ model User {
   jobsCreated  Job[]         @relation("RecruiterJobs")
   applications Application[]
   savedJobs    SavedJob[]
+  company      Company?      @relation("RecruiterCompany")
 
   @@map("users")
 }
@@ -61,6 +62,8 @@ model Company {
 
   // Relations
   jobs        Job[]
+  recruiterId String?   @unique
+  recruiter   User?     @relation("RecruiterCompany", fields: [recruiterId], references: [id], onDelete: Cascade)
 
   @@map("companies")
 }

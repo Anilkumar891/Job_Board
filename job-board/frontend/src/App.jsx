@@ -18,6 +18,7 @@ import CandidateDashboard from './pages/CandidateDashboard';
 import RecruiterDashboard from './pages/RecruiterDashboard';
 import CreateJob from './pages/CreateJob';
 import EditJob from './pages/EditJob';
+import CreateCompany from './pages/CreateCompany';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -61,6 +62,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['RECRUITER']}>
                     <RecruiterDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/create-company"
+                element={
+                  <ProtectedRoute allowedRoles={['RECRUITER']}>
+                    <CreateCompany />
                   </ProtectedRoute>
                 }
               />
