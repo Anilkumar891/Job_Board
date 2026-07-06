@@ -6,10 +6,27 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// ── Allowed origins ─────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'https://job-board-dusky-alpha.vercel.app', // Production frontend
+  'http://localhost:5173',                     // Local dev
+  'http://localhost:4173',                     // Local preview
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    // Allow any vercel.app subdomain (preview deployments) + explicit list
+    if (
+      ALLOWED_ORIGINS.includes(origin) ||
+      /^https:\/\/[\w-]+(\.vercel\.app)$/.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

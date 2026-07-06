@@ -11,7 +11,11 @@ import {
 } from 'lucide-react';
 
 // ── Keep Render backend awake (prevents cold-start delay for shared users) ─
-const BACKEND_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
+const BACKEND_URL = (
+  import.meta.env.VITE_API_URL ||
+  'https://job-board-backend-yzf4.onrender.com/api'
+).replace('/api', '');
+
 const pingBackend = () => {
   fetch(`${BACKEND_URL}/health`, { method: 'GET', cache: 'no-store' }).catch(() => {});
 };
