@@ -1,7 +1,7 @@
 const prisma = require('../config/db');
 const providerManager = require('../services/externalJobs/providerManager');
 
-// @desc    Get all jobs (recruiter + external, merged, filtered, paginated)
+// @desc    Get recruiter jobs from DB (fast, instant response)
 // @route   GET /api/jobs
 // @access  Public
 const getAllJobs = async (req, res, next) => {
@@ -13,16 +13,15 @@ const getAllJobs = async (req, res, next) => {
       workMode,
       experience,
       skills,
-      sortBy, // 'latest', 'highest-salary', 'lowest-salary'
+      sortBy,
       page = 1,
       limit = 12,
-      includeExternal = 'true'
     } = req.query;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
 
-    // ─── 1. RECRUITER JOBS FROM DATABASE ─────────────────────────────────────
+    // ── Build Prisma WHERE clause ─────────────────────────────────────────
     const where = { status: 'ACTIVE' };
 
     if (search) {
@@ -51,15 +50,24 @@ const getAllJobs = async (req, res, next) => {
       where.skills = { hasSome: skillList };
     }
 
-    const dbJobs = await prisma.job.findMany({
-      where,
-      include: {
-        company: {
-          select: { name: true, logo: true, location: true, industry: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    // ── Determine sort order ──────────────────────────────────────────────
+    let orderBy = { createdAt: 'desc' };
+    if (sortBy === 'highest-salary') orderBy = { salary: 'desc' };
+    else if (sortBy === 'lowest-salary') orderBy = { salary: 'asc' };
+
+    // ── Query DB (fast) ───────────────────────────────────────────────────
+    const [dbJobs, totalJobs] = await prisma.$transaction([
+      prisma.job.findMany({
+        where,
+        include: {
+          company: { select: { name: true, logo: true, location: true, industry: true } }
+        },
+        orderBy,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum
+      }),
+      prisma.job.count({ where })
+    ]);
 
     // Normalize recruiter jobs to unified format
     const recruiterJobs = dbJobs.map(job => ({
@@ -76,90 +84,27 @@ const getAllJobs = async (req, res, next) => {
       description: job.description || '',
       postedDate: job.createdAt,
       source: 'Recruiter',
-      applyUrl: null,        // null = in-app apply
-      originalId: job.id    // keep DB id for in-app apply flow
+      applyUrl: null,
+      originalId: job.id
     }));
 
-    // ─── 2. EXTERNAL JOBS FROM PROVIDER MANAGER ──────────────────────────────
-    let externalJobs = [];
-    if (includeExternal !== 'false') {
-      try {
-        externalJobs = await providerManager.getExternalJobs();
-      } catch (err) {
-        console.error('[getAllJobs] External provider fetch failed:', err.message);
-      }
-    }
-
-    // Apply same filters to external jobs in-memory
-    let filteredExternal = externalJobs;
-    if (search) {
-      const q = search.toLowerCase();
-      filteredExternal = filteredExternal.filter(j =>
-        j.title.toLowerCase().includes(q) ||
-        j.company.toLowerCase().includes(q) ||
-        (j.description || '').toLowerCase().includes(q) ||
-        (Array.isArray(j.skills) && j.skills.some(s => s.toLowerCase().includes(q)))
+    // ── Kick off external cache refresh in background (non-blocking) ──────
+    if (!providerManager.lastFetched) {
+      providerManager.loadAllExternalJobs().catch(err =>
+        console.error('[getAllJobs] Background external load error:', err.message)
       );
     }
-    if (location) {
-      const loc = location.toLowerCase();
-      filteredExternal = filteredExternal.filter(j =>
-        (j.location || '').toLowerCase().includes(loc)
-      );
-    }
-    if (workMode) {
-      const modes = Array.isArray(workMode) ? workMode.map(m => m.toLowerCase()) : [workMode.toLowerCase()];
-      if (modes.includes('remote')) {
-        filteredExternal = filteredExternal.filter(j => j.remote === true);
-      }
-    }
-    if (experience) {
-      const levels = Array.isArray(experience) ? experience.map(e => e.toLowerCase()) : [experience.toLowerCase()];
-      filteredExternal = filteredExternal.filter(j =>
-        levels.some(l => (j.experience || '').toLowerCase().includes(l))
-      );
-    }
-    if (jobType) {
-      const types = Array.isArray(jobType) ? jobType.map(t => t.toLowerCase()) : [jobType.toLowerCase()];
-      filteredExternal = filteredExternal.filter(j =>
-        types.some(t => (j.employmentType || '').toLowerCase().includes(t))
-      );
-    }
-
-    // ─── 3. MERGE & SORT ─────────────────────────────────────────────────────
-    let combined = [...recruiterJobs, ...filteredExternal];
-
-    if (sortBy === 'highest-salary') {
-      combined.sort((a, b) => {
-        const getSalary = s => parseInt((s || '0').replace(/[^0-9]/g, '')) || 0;
-        return getSalary(b.salary) - getSalary(a.salary);
-      });
-    } else if (sortBy === 'lowest-salary') {
-      combined.sort((a, b) => {
-        const getSalary = s => parseInt((s || '0').replace(/[^0-9]/g, '')) || 0;
-        return getSalary(a.salary) - getSalary(b.salary);
-      });
-    } else {
-      // Default: latest first
-      combined.sort((a, b) => new Date(b.postedDate) - new Date(a.postedDate));
-    }
-
-    // ─── 4. PAGINATE ─────────────────────────────────────────────────────────
-    const totalJobs = combined.length;
-    const totalPages = Math.ceil(totalJobs / limitNum);
-    const skip = (pageNum - 1) * limitNum;
-    const paginatedJobs = combined.slice(skip, skip + limitNum);
 
     res.status(200).json({
       success: true,
-      count: paginatedJobs.length,
+      count: recruiterJobs.length,
       pagination: {
         totalJobs,
-        totalPages,
+        totalPages: Math.ceil(totalJobs / limitNum),
         currentPage: pageNum,
         limit: limitNum
       },
-      data: paginatedJobs
+      data: recruiterJobs
     });
   } catch (error) {
     next(error);
