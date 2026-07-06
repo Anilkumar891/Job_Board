@@ -20,7 +20,12 @@ const getExternalJobs = async (req, res, next) => {
     const limitNum = parseInt(limit);
 
     // Fetch from cache (or refresh if stale)
-    let jobs = await providerManager.getExternalJobs();
+    let jobs = [];
+    try {
+      jobs = await providerManager.getExternalJobs();
+    } catch (fetchErr) {
+      console.warn('[ExternalJobsController]: Failed to fetch external jobs - returning empty list.', fetchErr.message);
+    }
 
     // ── Apply in-memory filters ──────────────────────────────────────────
     if (search) {
@@ -85,7 +90,20 @@ const getExternalJobs = async (req, res, next) => {
       data: paginated
     });
   } catch (error) {
-    next(error);
+    // In case of unexpected errors, still return a successful response with empty data
+    console.warn('[ExternalJobsController] Unexpected error, returning empty job list.', error.message);
+    res.status(200).json({
+      success: true,
+      count: 0,
+      cacheReady: false,
+      pagination: {
+        totalJobs: 0,
+        totalPages: 1,
+        currentPage: 1,
+        limit: 12
+      },
+      data: []
+    });
   }
 };
 
