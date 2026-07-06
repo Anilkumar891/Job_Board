@@ -65,11 +65,18 @@ function CandidateDashboard() {
   // Selected application for detail drawer
   const [selectedApp, setSelectedApp] = useState(null);
 
+  // Wrap API requests — defined FIRST so fetchData can call it
+  const fetchAllData = () =>
+    Promise.all([
+      api.get('/applications'),
+      api.get('/saved')
+    ]);
+
   // Fetch initial data
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [appRes, bookmarkRes] = await prismaPromise();
+      const [appRes, bookmarkRes] = await fetchAllData();
       setApplications(appRes.data.data);
       setBookmarks(bookmarkRes.data.data);
     } catch (err) {
@@ -78,14 +85,6 @@ function CandidateDashboard() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Wrap API requests
-  const prismaPromise = () => {
-    return Promise.all([
-      api.get('/applications'),
-      api.get('/saved')
-    ]);
   };
 
   useEffect(() => {
@@ -389,7 +388,7 @@ function CandidateDashboard() {
                     <div className="pt-2 flex items-center gap-1 text-[10px] font-bold text-primary-600 dark:text-primary-400">
                       <FileText className="w-3.5 h-3.5" />
                       <span>Resume submitted: </span>
-                      <a href={`http://localhost:5000${selectedApp.resumeUrl}`} target="_blank" rel="noopener noreferrer" className="underline">View PDF</a>
+                      <a href={`https://job-board-backend-yzf4.onrender.com${selectedApp.resumeUrl}`} target="_blank" rel="noopener noreferrer" className="underline">View PDF</a>
                     </div>
                   )}
                 </div>

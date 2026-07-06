@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -28,15 +28,19 @@ function App() {
         <BrowserRouter>
           <Layout>
             <Routes>
-              {/* Public Routes */}
+              {/* ── Public Routes ─────────────────────────────── */}
               <Route path="/" element={<Home />} />
               <Route path="/jobs" element={<BrowseJobs />} />
               <Route path="/jobs/:id" element={<JobDetails />} />
+
+              {/* Company profile — supports both /companies/:id and /company/:id */}
               <Route path="/companies/:id" element={<CompanyProfile />} />
+              <Route path="/company/:id" element={<CompanyProfile />} />
+
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
-              {/* Guarded Shared Profile */}
+              {/* ── Protected Shared Profile ───────────────────── */}
               <Route
                 path="/profile"
                 element={
@@ -46,7 +50,7 @@ function App() {
                 }
               />
 
-              {/* Candidate Only Dashboard */}
+              {/* ── Candidate Routes ───────────────────────────── */}
               <Route
                 path="/candidate-dashboard"
                 element={
@@ -55,8 +59,14 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              {/* Alias: /candidate/dashboard → /candidate-dashboard */}
+              <Route
+                path="/candidate/dashboard"
+                element={<Navigate to="/candidate-dashboard" replace />}
+              />
+              {/* Alias: /dashboard (candidates redirected by role in ProtectedRoute) */}
 
-              {/* Recruiter Only Dashboard & Operations */}
+              {/* ── Recruiter Routes ───────────────────────────── */}
               <Route
                 path="/recruiter-dashboard"
                 element={
@@ -64,6 +74,11 @@ function App() {
                     <RecruiterDashboard />
                   </ProtectedRoute>
                 }
+              />
+              {/* Alias: /recruiter/dashboard → /recruiter-dashboard */}
+              <Route
+                path="/recruiter/dashboard"
+                element={<Navigate to="/recruiter-dashboard" replace />}
               />
               <Route
                 path="/create-company"
@@ -90,13 +105,21 @@ function App() {
                 }
               />
 
-              {/* 404 Route */}
+              {/* ── Convenience Aliases ────────────────────────── */}
+              {/* /find-jobs, /browse, /all-jobs → /jobs */}
+              <Route path="/find-jobs" element={<Navigate to="/jobs" replace />} />
+              <Route path="/browse" element={<Navigate to="/jobs" replace />} />
+              <Route path="/all-jobs" element={<Navigate to="/jobs" replace />} />
+              {/* /not-found → 404 page */}
+              <Route path="/not-found" element={<NotFound />} />
+
+              {/* ── 404 Catch-All ──────────────────────────────── */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
         </BrowserRouter>
-        
-        {/* Custom Premium Toast Configuration */}
+
+        {/* Premium Toast Notifications */}
         <Toaster
           position="bottom-right"
           toastOptions={{
@@ -113,16 +136,10 @@ function App() {
               boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
             },
             success: {
-              iconTheme: {
-                primary: '#10b981',
-                secondary: '#fff',
-              },
+              iconTheme: { primary: '#10b981', secondary: '#fff' },
             },
             error: {
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
-              },
+              iconTheme: { primary: '#ef4444', secondary: '#fff' },
             },
           }}
         />

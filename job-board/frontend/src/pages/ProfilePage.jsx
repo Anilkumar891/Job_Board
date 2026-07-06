@@ -125,7 +125,7 @@ function ProfilePage() {
                     </div>
                   </div>
                   <a
-                    href={`http://localhost:5000${user.resumeUrl}`}
+                    href={`https://job-board-backend-yzf4.onrender.com${user.resumeUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-100 hover:bg-primary-200 dark:bg-primary-950/20 text-primary-700 dark:text-primary-300 font-bold rounded-lg text-xs"

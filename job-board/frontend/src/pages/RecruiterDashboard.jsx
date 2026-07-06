@@ -416,7 +416,7 @@ function RecruiterDashboard() {
                         {/* Resume File URL */}
                         {app.resumeUrl && (
                           <a
-                            href={`http://localhost:5000${app.resumeUrl}`}
+                            href={`https://job-board-backend-yzf4.onrender.com${app.resumeUrl}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-250 dark:bg-zinc-800 text-slate-700 dark:text-zinc-350 font-bold rounded-lg text-xs"
